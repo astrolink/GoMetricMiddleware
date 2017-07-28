@@ -14,6 +14,11 @@ type loggingResponseWriter struct {
 	statusCode int
 }
 
+var requestsDuration prometheus.Histogram
+var requestsCurrent prometheus.Gauge
+var requestsStatus prometheus.CounterVec
+var clientErrors prometheus.Counter
+
 func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
 	return &loggingResponseWriter{w, http.StatusOK}
 }
@@ -74,4 +79,11 @@ func MetricsMiddleware(namespace string, next http.Handler) http.Handler {
 		requestsCurrent.Dec()
 		requestsDuration.Observe(float64(time.Since(start).Seconds()))
 	})
+}
+
+func init() {
+	prometheus.MustRegister(requestsDuration)
+	prometheus.MustRegister(requestsCurrent)
+	prometheus.MustRegister(requestsStatus)
+	prometheus.MustRegister(clientErrors)
 }
