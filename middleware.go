@@ -28,7 +28,7 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.ResponseWriter.WriteHeader(code)
 }
 
-func MetricsMiddleware(namespace string, next http.Handler) http.Handler {
+func Handler(namespace string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestsDuration := prometheus.NewHistogram(
 			prometheus.HistogramOpts{
