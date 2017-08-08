@@ -40,7 +40,7 @@ func (m Middleware) Handler(namespace string, next http.Handler) http.Handler {
 			prometheus.HistogramOpts{
 				Namespace: namespace,
 				Name:      "request_duration_seconds",
-				Help:      "The duration of the requests to the Statistics service.",
+				Help:      "The duration of the requests to " + namespace,
 			},
 		)
 
