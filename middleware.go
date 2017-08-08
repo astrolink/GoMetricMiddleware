@@ -9,17 +9,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type loggingResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-var (
+type Middleware struct {
 	RequestsDuration prometheus.Histogram
 	RequestsCurrent  prometheus.Gauge
 	RequestsStatus   *prometheus.CounterVec
 	ClientErrors     prometheus.Counter
-)
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
 
 func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
 	return &loggingResponseWriter{w, http.StatusOK}
@@ -30,9 +30,13 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.ResponseWriter.WriteHeader(code)
 }
 
-func Handler(namespace string, next http.Handler) http.Handler {
+func NewMiddleware() Middleware {
+	return Middleware{}
+}
+
+func (m Middleware) Handler(namespace string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		RequestsDuration = prometheus.NewHistogram(
+		m.RequestsDuration = prometheus.NewHistogram(
 			prometheus.HistogramOpts{
 				Namespace: namespace,
 				Name:      "request_duration_seconds",
@@ -40,7 +44,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			},
 		)
 
-		RequestsCurrent = prometheus.NewGauge(
+		m.RequestsCurrent = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
 				Name:      "requests_current",
@@ -48,7 +52,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			},
 		)
 
-		RequestsStatus = prometheus.NewCounterVec(
+		m.RequestsStatus = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
 				Name:      "requests_total",
@@ -57,7 +61,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			[]string{"code", "method", "path"},
 		)
 
-		ClientErrors = prometheus.NewCounter(
+		m.ClientErrors = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Namespace: namespace,
 				Name:      "errors",
@@ -65,20 +69,20 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			})
 
 		start := time.Now()
-		RequestsCurrent.Inc()
+		m.RequestsCurrent.Inc()
 
 		lrw := newLoggingResponseWriter(w)
 		next.ServeHTTP(lrw, r)
 
 		statusCode := lrw.statusCode
 
-		RequestsStatus.WithLabelValues(strconv.Itoa(statusCode), r.Method, r.URL.Path).Inc()
+		m.RequestsStatus.WithLabelValues(strconv.Itoa(statusCode), r.Method, r.URL.Path).Inc()
 
 		if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
-			ClientErrors.Inc()
+			m.ClientErrors.Inc()
 		}
 
-		RequestsCurrent.Dec()
-		RequestsDuration.Observe(float64(time.Since(start).Seconds()))
+		m.RequestsCurrent.Dec()
+		m.RequestsDuration.Observe(float64(time.Since(start).Seconds()))
 	})
 }
