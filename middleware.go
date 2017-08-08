@@ -15,10 +15,10 @@ type loggingResponseWriter struct {
 }
 
 var (
-	requestsDuration prometheus.Histogram
-	requestsCurrent  prometheus.Gauge
-	requestsStatus   prometheus.CounterVec
-	clientErrors     prometheus.Counter
+	RequestsDuration prometheus.Histogram
+	RequestsCurrent  prometheus.Gauge
+	RequestsStatus   *prometheus.CounterVec
+	ClientErrors     prometheus.Counter
 )
 
 func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
@@ -32,7 +32,7 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func Handler(namespace string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestsDuration := prometheus.NewHistogram(
+		RequestsDuration = prometheus.NewHistogram(
 			prometheus.HistogramOpts{
 				Namespace: namespace,
 				Name:      "request_duration_seconds",
@@ -40,7 +40,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			},
 		)
 
-		requestsCurrent := prometheus.NewGauge(
+		RequestsCurrent = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
 				Name:      "requests_current",
@@ -48,7 +48,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			},
 		)
 
-		requestsStatus := prometheus.NewCounterVec(
+		RequestsStatus = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
 				Name:      "requests_total",
@@ -57,7 +57,7 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			[]string{"code", "method", "path"},
 		)
 
-		clientErrors := prometheus.NewCounter(
+		ClientErrors = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Namespace: namespace,
 				Name:      "errors",
@@ -65,27 +65,20 @@ func Handler(namespace string, next http.Handler) http.Handler {
 			})
 
 		start := time.Now()
-		requestsCurrent.Inc()
+		RequestsCurrent.Inc()
 
 		lrw := newLoggingResponseWriter(w)
 		next.ServeHTTP(lrw, r)
 
 		statusCode := lrw.statusCode
 
-		requestsStatus.WithLabelValues(strconv.Itoa(statusCode), r.Method, r.URL.Path).Inc()
+		RequestsStatus.WithLabelValues(strconv.Itoa(statusCode), r.Method, r.URL.Path).Inc()
 
 		if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
-			clientErrors.Inc()
+			ClientErrors.Inc()
 		}
 
-		requestsCurrent.Dec()
-		requestsDuration.Observe(float64(time.Since(start).Seconds()))
+		RequestsCurrent.Dec()
+		RequestsDuration.Observe(float64(time.Since(start).Seconds()))
 	})
-}
-
-func init() {
-	prometheus.MustRegister(requestsDuration)
-	prometheus.MustRegister(requestsCurrent)
-	prometheus.MustRegister(requestsStatus)
-	prometheus.MustRegister(clientErrors)
 }
